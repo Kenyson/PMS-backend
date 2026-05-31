@@ -15,6 +15,9 @@ app.use(cors(corsOptions));
 
 app.options('*', cors(corsOptions));
 
+const dbPath = __dirname + '/database.db';
+const db = new sqlite3.Database(dbPath);
+
 db.serialize(() => {
   db.run(`
     CREATE TABLE IF NOT EXISTS medico (
