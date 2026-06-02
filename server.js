@@ -2,8 +2,10 @@ const express = require('express');
 const app = express();
 const cors = require('cors');
 const sqlite3 = require('sqlite3').verbose();
+const bcrypt = require('bcrypt');
 
 const porta = process.env.PORT || 3000;
+const SEED_API_SECRET = process.env.SEED_API_SECRET || 'pharma-seed-secret-2026';
 
 const corsOptions = {
   origin: '*',
@@ -495,6 +497,130 @@ app.post('/conexao', (req, res) => {
   );
 });
 
+
+app.post('/api/seed', async (req, res) => {
+  const authHeader = req.headers['authorization'];
+  
+  if (!authHeader || authHeader !== `Bearer ${SEED_API_SECRET}`) {
+    return res.status(401).json({ success: false, message: 'Unauthorized: Invalid or missing API token' });
+  }
+
+  const { medicos, pacientes, receitas, conexoes } = req.body;
+
+  if (!medicos && !pacientes && !receitas && !conexoes) {
+    return res.status(400).json({ success: false, message: 'No seed data provided' });
+  }
+
+  try {
+    const results = { success: true, message: 'Seed completed successfully', inserted: {} };
+
+    if (receitas && receitas.length > 0) {
+      await new Promise((resolve, reject) => {
+        db.run('DELETE FROM receitas', (err) => err ? reject(err) : resolve());
+      });
+    }
+    if (conexoes && conexoes.length > 0) {
+      await new Promise((resolve, reject) => {
+        db.run('DELETE FROM medico_paciente', (err) => err ? reject(err) : resolve());
+      });
+    }
+    if (pacientes && pacientes.length > 0) {
+      await new Promise((resolve, reject) => {
+        db.run('DELETE FROM pacientes', (err) => err ? reject(err) : resolve());
+      });
+    }
+    if (medicos && medicos.length > 0) {
+      await new Promise((resolve, reject) => {
+        db.run('DELETE FROM medico', (err) => err ? reject(err) : resolve());
+      });
+    }
+
+    const hashedPasswords = {};
+    if (medicos) {
+      for (const medico of medicos) {
+        if (medico.senha && !hashedPasswords[medico.senha]) {
+          hashedPasswords[medico.senha] = await bcrypt.hash(medico.senha, 10);
+        }
+      }
+    }
+    if (pacientes) {
+      for (const paciente of pacientes) {
+        if (paciente.senha && !hashedPasswords[paciente.senha]) {
+          hashedPasswords[paciente.senha] = await bcrypt.hash(paciente.senha, 10);
+        }
+      }
+    }
+
+    if (medicos && medicos.length > 0) {
+      const stmt = db.prepare(`
+        INSERT OR REPLACE INTO medico (crm, estado, nome, sobrenome, telefone, especialidade, senha)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `);
+      for (const m of medicos) {
+        await new Promise((resolve, reject) => {
+          stmt.run([m.crm, m.estado, m.nome, m.sobrenome, m.telefone, m.especialidade, hashedPasswords[m.senha]], (err) => err ? reject(err) : resolve());
+        });
+      }
+      await new Promise((resolve, reject) => {
+        stmt.finalize((err) => err ? reject(err) : resolve());
+      });
+      results.inserted.medicos = medicos.length;
+    }
+
+    if (pacientes && pacientes.length > 0) {
+      const stmt = db.prepare(`
+        INSERT OR REPLACE INTO pacientes (id, nome, sobrenome, cpf, data_nascimento, telefone, senha)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `);
+      for (const p of pacientes) {
+        await new Promise((resolve, reject) => {
+          stmt.run([p.id, p.nome, p.sobrenome, p.cpf, p.data_nascimento, p.telefone, hashedPasswords[p.senha]], (err) => err ? reject(err) : resolve());
+        });
+      }
+      await new Promise((resolve, reject) => {
+        stmt.finalize((err) => err ? reject(err) : resolve());
+      });
+      results.inserted.pacientes = pacientes.length;
+    }
+
+    if (receitas && receitas.length > 0) {
+      const stmt = db.prepare(`
+        INSERT OR REPLACE INTO receitas (id, nome_comercial, principio_ativo, indicacao, medico_id, paciente_id, data_prescricao, data_validade, posologia, nomeMedico)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      for (const r of receitas) {
+        await new Promise((resolve, reject) => {
+          stmt.run([r.id, r.nome_comercial, r.principio_ativo, r.indicacao, r.medico_id, r.paciente_id, r.data_prescricao, r.data_validade, r.posologia, r.nomeMedico], (err) => err ? reject(err) : resolve());
+        });
+      }
+      await new Promise((resolve, reject) => {
+        stmt.finalize((err) => err ? reject(err) : resolve());
+      });
+      results.inserted.receitas = receitas.length;
+    }
+
+    if (conexoes && conexoes.length > 0) {
+      const stmt = db.prepare(`
+        INSERT OR REPLACE INTO medico_paciente (medico_id, paciente_id)
+        VALUES (?, ?)
+      `);
+      for (const c of conexoes) {
+        await new Promise((resolve, reject) => {
+          stmt.run([c.medico_id, c.paciente_id], (err) => err ? reject(err) : resolve());
+        });
+      }
+      await new Promise((resolve, reject) => {
+        stmt.finalize((err) => err ? reject(err) : resolve());
+      });
+      results.inserted.conexoes = conexoes.length;
+    }
+
+    res.status(200).json(results);
+  } catch (err) {
+    console.error('Seed error:', err);
+    res.status(500).json({ success: false, message: 'Seed failed', error: err.message });
+  }
+});
 
 app.listen(porta, () => {
   console.log(`Servidor rodando na porta ${porta}`);
