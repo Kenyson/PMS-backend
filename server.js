@@ -303,50 +303,104 @@ app.post('/login', (req, res) => {
   if (userType === 'medico') {
     const { crm, estado } = req.body;
     db.get(
-      'SELECT crm, estado, nome, sobrenome FROM medico WHERE crm = ? AND estado = ? AND senha = ?',
-      [crm, estado, password],
+      'SELECT crm, estado, nome, sobrenome, senha FROM medico WHERE crm = ? AND estado = ?',
+      [crm, estado],
       (err, row) => {
         if (err) {
           console.error(err);
           res.status(500).send('Erro ao autenticar médico.');
+        } else if (row) {
+          bcrypt.compare(password, row.senha, (compareErr, match) => {
+            if (compareErr) {
+              console.error(compareErr);
+              res.status(500).send('Erro ao verificar senha.');
+            } else if (match) {
+              res.status(200).json({
+                success: true,
+                message: 'Login médico bem-sucedido.',
+                crm: row.crm,
+                estado: row.estado,
+                nome: row.nome,
+                sobrenome: row.sobrenome
+              });
+            } else {
+              res.status(401).json({
+                success: false,
+                message: 'Credenciais inválidas.',
+                debug: {
+                  userFound: true,
+                  crmFound: row.crm,
+                  estadoFound: row.estado,
+                  passwordMatch: false,
+                  storedHash: row.senha ? row.senha.substring(0, 20) + '...' : null
+                }
+              });
+            }
+          });
         } else {
-          if (row) {
-            res.status(200).json({
-              success: true,
-              message: 'Login médico bem-sucedido.',
-              crm: row.crm,
-              estado: row.estado,
-              nome: row.nome,
-              sobrenome: row.sobrenome
+          db.all('SELECT crm, estado, nome, sobrenome FROM medico', (allErr, allRows) => {
+            res.status(401).json({
+              success: false,
+              message: 'Credenciais inválidas.',
+              debug: {
+                userFound: false,
+                searchedCrm: crm,
+                searchedEstado: estado,
+                allDoctors: allRows || []
+              }
             });
-          } else {
-            res.status(401).json({ success: false, message: 'Credenciais inválidas.' });
-          }
+          });
         }
       }
     );
   } else if (userType === 'paciente') {
     const { cpf } = req.body;
     db.get(
-      'SELECT id, cpf, nome, sobrenome FROM pacientes WHERE cpf = ? AND senha = ?',
-      [cpf, password],
+      'SELECT id, cpf, nome, sobrenome, senha FROM pacientes WHERE cpf = ?',
+      [cpf],
       (err, row) => {
         if (err) {
           console.error(err);
           res.status(500).send('Erro ao autenticar paciente.');
+        } else if (row) {
+          bcrypt.compare(password, row.senha, (compareErr, match) => {
+            if (compareErr) {
+              console.error(compareErr);
+              res.status(500).send('Erro ao verificar senha.');
+            } else if (match) {
+              res.status(200).json({
+                success: true,
+                message: 'Login paciente bem-sucedido.',
+                id: row.id,
+                cpf: row.cpf,
+                nome: row.nome,
+                sobrenome: row.sobrenome
+              });
+            } else {
+              res.status(401).json({
+                success: false,
+                message: 'Credenciais inválidas.',
+                debug: {
+                  userFound: true,
+                  cpfFound: row.cpf,
+                  passwordMatch: false,
+                  storedHash: row.senha ? row.senha.substring(0, 20) + '...' : null
+                }
+              });
+            }
+          });
         } else {
-          if (row) {
-            res.status(200).json({
-              success: true,
-              message: 'Login paciente bem-sucedido.',
-              id: row.id,
-              cpf: row.cpf,
-              nome: row.nome,
-              sobrenome: row.sobrenome
+          db.all('SELECT id, cpf, nome, sobrenome FROM pacientes', (allErr, allRows) => {
+            res.status(401).json({
+              success: false,
+              message: 'Credenciais inválidas.',
+              debug: {
+                userFound: false,
+                searchedCpf: cpf,
+                allPatients: allRows || []
+              }
             });
-          } else {
-            res.status(401).json({ success: false, message: 'Credenciais inválidas.' });
-          }
+          });
         }
       }
     );
