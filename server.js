@@ -164,7 +164,6 @@ db.serialize(() => {
 app.post('/medicos', (req, res) => {
   const novoMedico = req.body;
 
-
   db.get('SELECT crm, estado FROM medico WHERE crm = ? AND estado = ?', [novoMedico.crm, novoMedico.estado], (err, row) => {
     if (err) {
       console.error(err);
@@ -173,28 +172,34 @@ app.post('/medicos', (req, res) => {
       if (row) {
         res.status(400).send('Já existe um médico com o mesmo CRM e estado.');
       } else {
-
-        db.run(
-          'INSERT INTO medico (crm, estado, nome, sobrenome, telefone, especialidade, senha) VALUES (?, ?, ?, ?, ?, ?, ?)',
-          [
-            novoMedico.crm,
-            novoMedico.estado,
-            novoMedico.nome,
-            novoMedico.sobrenome,
-            novoMedico.telefone,
-            novoMedico.especialidade,
-            novoMedico.senha
-          ],
-          function (err) {
-            if (err) {
-              console.error(err);
-              res.status(500).send('Erro ao adicionar médico ao banco de dados.');
-            } else {
-              novoMedico.crm = this.lastID;
-              res.status(201).json(novoMedico);
-            }
+        bcrypt.hash(novoMedico.senha, 10, (hashErr, hashedPassword) => {
+          if (hashErr) {
+            console.error(hashErr);
+            res.status(500).send('Erro ao criptografar senha.');
+          } else {
+            db.run(
+              'INSERT INTO medico (crm, estado, nome, sobrenome, telefone, especialidade, senha) VALUES (?, ?, ?, ?, ?, ?, ?)',
+              [
+                novoMedico.crm,
+                novoMedico.estado,
+                novoMedico.nome,
+                novoMedico.sobrenome,
+                novoMedico.telefone,
+                novoMedico.especialidade,
+                hashedPassword
+              ],
+              function (err) {
+                if (err) {
+                  console.error(err);
+                  res.status(500).send('Erro ao adicionar médico ao banco de dados.');
+                } else {
+                  novoMedico.crm = this.lastID;
+                  res.status(201).json(novoMedico);
+                }
+              }
+            );
           }
-        );
+        });
       }
     }
   });
@@ -246,50 +251,64 @@ app.post('/pacientes', (req, res) => {
     } else {
       if (row) {
         if (!row.senha) {
-          db.run(
-            'UPDATE pacientes SET nome = ?, sobrenome = ?, data_nascimento = ?, telefone = ?, senha = ? WHERE cpf = ?',
-            [
-              novoPaciente.nome,
-              novoPaciente.sobrenome,
-              novoPaciente.dataNascimento,
-              novoPaciente.telefone,
-              novoPaciente.senha,
-              novoPaciente.cpf
-            ],
-            function (err) {
-              if (err) {
-                console.error(err);
-                res.status(500).send('Erro ao atualizar paciente no banco de dados.');
-              } else {
-                novoPaciente.id = row.id;
-                res.status(200).json(novoPaciente);
-              }
+          bcrypt.hash(novoPaciente.senha, 10, (hashErr, hashedPassword) => {
+            if (hashErr) {
+              console.error(hashErr);
+              res.status(500).send('Erro ao criptografar senha.');
+            } else {
+              db.run(
+                'UPDATE pacientes SET nome = ?, sobrenome = ?, data_nascimento = ?, telefone = ?, senha = ? WHERE cpf = ?',
+                [
+                  novoPaciente.nome,
+                  novoPaciente.sobrenome,
+                  novoPaciente.dataNascimento,
+                  novoPaciente.telefone,
+                  hashedPassword,
+                  novoPaciente.cpf
+                ],
+                function (err) {
+                  if (err) {
+                    console.error(err);
+                    res.status(500).send('Erro ao atualizar paciente no banco de dados.');
+                  } else {
+                    novoPaciente.id = row.id;
+                    res.status(200).json(novoPaciente);
+                  }
+                }
+              );
             }
-          );
+          });
         } else {
           res.status(400).send('CPF já cadastrado.');
         }
       } else {
-        db.run(
-          'INSERT INTO pacientes (nome, sobrenome, cpf, data_nascimento, telefone, senha) VALUES (?, ?, ?, ?, ?, ?)',
-          [
-            novoPaciente.nome,
-            novoPaciente.sobrenome,
-            novoPaciente.cpf,
-            novoPaciente.dataNascimento,
-            novoPaciente.telefone,
-            novoPaciente.senha
-          ],
-          function (err) {
-            if (err) {
-              console.error(err);
-              res.status(500).send('Erro ao adicionar paciente ao banco de dados.');
-            } else {
-              novoPaciente.id = this.lastID;
-              res.status(201).json(novoPaciente);
-            }
+        bcrypt.hash(novoPaciente.senha, 10, (hashErr, hashedPassword) => {
+          if (hashErr) {
+            console.error(hashErr);
+            res.status(500).send('Erro ao criptografar senha.');
+          } else {
+            db.run(
+              'INSERT INTO pacientes (nome, sobrenome, cpf, data_nascimento, telefone, senha) VALUES (?, ?, ?, ?, ?, ?)',
+              [
+                novoPaciente.nome,
+                novoPaciente.sobrenome,
+                novoPaciente.cpf,
+                novoPaciente.dataNascimento,
+                novoPaciente.telefone,
+                hashedPassword
+              ],
+              function (err) {
+                if (err) {
+                  console.error(err);
+                  res.status(500).send('Erro ao adicionar paciente ao banco de dados.');
+                } else {
+                  novoPaciente.id = this.lastID;
+                  res.status(201).json(novoPaciente);
+                }
+              }
+            );
           }
-        );
+        });
       }
     }
   });
