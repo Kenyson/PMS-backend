@@ -102,14 +102,14 @@ db.serialize(() => {
                 receitas.forEach((receita) => {
                   let prescricao = receita.data_prescricao;
                   let validade = receita.data_validade;
-                  
+
                   let originalPrescricao = prescricao;
-                  
+
                   if (/^\d{4}-\d{2}-\d{2}$/.test(prescricao)) {
                     const [y, m, d] = prescricao.split('-');
                     prescricao = `${d}-${m}-${y}`;
                   }
-                  
+
                   if (!validade || validade === '') {
                     const [y, m, d] = originalPrescricao.split('-');
                     const dataObj = new Date(y, m - 1, d);
@@ -123,7 +123,7 @@ db.serialize(() => {
                     const [y, m, d] = validade.split('-');
                     validade = `${d}-${m}-${y}`;
                   }
-                  
+
                   db.run("UPDATE receitas SET data_prescricao = ?, data_validade = ? WHERE id = ?", [prescricao, validade, receita.id]);
                 });
                 console.log('Datas atualizadas com sucesso');
@@ -134,7 +134,7 @@ db.serialize(() => {
           }
         });
       };
-      
+
       if (!hasDataValidade) {
         db.run("ALTER TABLE receitas ADD COLUMN data_validade TEXT", (alterErr) => {
           if (alterErr) {
@@ -282,33 +282,57 @@ app.post('/pacientes', (req, res) => {
           res.status(400).send('CPF já cadastrado.');
         }
       } else {
-        bcrypt.hash(novoPaciente.senha, 10, (hashErr, hashedPassword) => {
-          if (hashErr) {
-            console.error(hashErr);
-            res.status(500).send('Erro ao criptografar senha.');
-          } else {
-            db.run(
-              'INSERT INTO pacientes (nome, sobrenome, cpf, data_nascimento, telefone, senha) VALUES (?, ?, ?, ?, ?, ?)',
-              [
-                novoPaciente.nome,
-                novoPaciente.sobrenome,
-                novoPaciente.cpf,
-                novoPaciente.dataNascimento,
-                novoPaciente.telefone,
-                hashedPassword
-              ],
-              function (err) {
-                if (err) {
-                  console.error(err);
-                  res.status(500).send('Erro ao adicionar paciente ao banco de dados.');
+            if (novoPaciente.senha) {
+              bcrypt.hash(novoPaciente.senha, 10, (hashErr, hashedPassword) => {
+                if (hashErr) {
+                  console.error(hashErr);
+                  res.status(500).send('Erro ao criptografar senha.');
                 } else {
-                  novoPaciente.id = this.lastID;
-                  res.status(201).json(novoPaciente);
+                  db.run(
+                    'INSERT INTO pacientes (nome, sobrenome, cpf, data_nascimento, telefone, senha) VALUES (?, ?, ?, ?, ?, ?)',
+                    [
+                      novoPaciente.nome || null,
+                      novoPaciente.sobrenome || null,
+                      novoPaciente.cpf,
+                      novoPaciente.dataNascimento || null,
+                      novoPaciente.telefone || null,
+                      hashedPassword
+                    ],
+                    function (err) {
+                      if (err) {
+                        console.error(err);
+                        res.status(500).send('Erro ao adicionar paciente ao banco de dados.');
+                      } else {
+                        novoPaciente.id = this.lastID;
+                        res.status(201).json(novoPaciente);
+                      }
+                    }
+                  );
                 }
-              }
-            );
-          }
-        });
+              });
+            } else {
+              // Criar paciente provisório sem senha
+              db.run(
+                'INSERT INTO pacientes (nome, sobrenome, cpf, data_nascimento, telefone, senha) VALUES (?, ?, ?, ?, ?, ?)',
+                [
+                  novoPaciente.nome || null,
+                  novoPaciente.sobrenome || null,
+                  novoPaciente.cpf,
+                  novoPaciente.dataNascimento || null,
+                  novoPaciente.telefone || null,
+                  null
+                ],
+                function (err) {
+                  if (err) {
+                    console.error(err);
+                    res.status(500).send('Erro ao adicionar paciente provisório ao banco de dados.');
+                  } else {
+                    novoPaciente.id = this.lastID;
+                    res.status(201).json(novoPaciente);
+                  }
+                }
+              );
+            }
       }
     }
   });
@@ -533,7 +557,7 @@ app.post('/conexao', (req, res) => {
 
 app.post('/api/seed', async (req, res) => {
   const authHeader = req.headers['authorization'];
-  
+
   if (!authHeader || authHeader !== `Bearer ${SEED_API_SECRET}`) {
     return res.status(401).json({ success: false, message: 'Unauthorized: Invalid or missing API token' });
   }
