@@ -159,6 +159,20 @@ db.serialize(() => {
       FOREIGN KEY (paciente_id) REFERENCES pacientes (id)
     )
   `);
+
+  db.run(`
+    DELETE FROM medico_paciente
+    WHERE id NOT IN (
+      SELECT MIN(id)
+      FROM medico_paciente
+      GROUP BY medico_id, paciente_id
+    )
+  `);
+
+  db.run(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_medico_paciente_unique
+    ON medico_paciente (medico_id, paciente_id)
+  `);
 });
 
 app.post('/medicos', (req, res) => {
@@ -490,7 +504,7 @@ app.delete('/pacientes/:id', (req, res) => {
 app.get('/medico/:crm/pacientes', (req, res) => {
   const { crm } = req.params;
   const query = `
-    SELECT p.id, p.nome, p.sobrenome, p.cpf, p.data_nascimento, p.telefone
+    SELECT DISTINCT p.id, p.nome, p.sobrenome, p.cpf, p.data_nascimento, p.telefone
     FROM pacientes p
     INNER JOIN medico_paciente mp ON p.id = mp.paciente_id
     WHERE mp.medico_id = ?`;
