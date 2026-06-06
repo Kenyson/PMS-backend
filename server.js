@@ -582,29 +582,8 @@ app.post('/api/seed', async (req, res) => {
     return res.status(400).json({ success: false, message: 'No seed data provided' });
   }
 
-  try {
+try {
     const results = { success: true, message: 'Seed completed successfully', inserted: {} };
-
-    if (receitas && receitas.length > 0) {
-      await new Promise((resolve, reject) => {
-        db.run('DELETE FROM receitas', (err) => err ? reject(err) : resolve());
-      });
-    }
-    if (conexoes && conexoes.length > 0) {
-      await new Promise((resolve, reject) => {
-        db.run('DELETE FROM medico_paciente', (err) => err ? reject(err) : resolve());
-      });
-    }
-    if (pacientes && pacientes.length > 0) {
-      await new Promise((resolve, reject) => {
-        db.run('DELETE FROM pacientes', (err) => err ? reject(err) : resolve());
-      });
-    }
-    if (medicos && medicos.length > 0) {
-      await new Promise((resolve, reject) => {
-        db.run('DELETE FROM medico', (err) => err ? reject(err) : resolve());
-      });
-    }
 
     const hashedPasswords = {};
     if (medicos) {
@@ -669,6 +648,14 @@ app.post('/api/seed', async (req, res) => {
       });
       results.inserted.receitas = receitas.length;
     }
+
+    await new Promise((resolve, reject) => {
+      db.run('DELETE FROM medico_paciente WHERE paciente_id NOT IN (SELECT id FROM pacientes)', (err) => err ? reject(err) : resolve());
+    });
+
+    await new Promise((resolve, reject) => {
+      db.run('DELETE FROM receitas WHERE paciente_id NOT IN (SELECT id FROM pacientes)', (err) => err ? reject(err) : resolve());
+    });
 
     if (conexoes && conexoes.length > 0) {
       const stmt = db.prepare(`
